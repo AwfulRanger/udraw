@@ -20,6 +20,7 @@
 #define WIIMOTE_BUT_UP 0x0800
 #define WIIMOTE_BUT_PLUS 0x1000
 
+#define WIIMOTE_LED_NONE 0x00
 #define WIIMOTE_LED_ONE 0x01
 #define WIIMOTE_LED_TWO 0x02
 #define WIIMOTE_LED_THREE 0x04
@@ -86,7 +87,7 @@ class Wiimote {
 		
 		// uDraw
 		bool InitUDraw();
-		UDrawData PollUDraw();
+		void PollUDraw( UDrawData * data );
 		
 		// Construction
 		Wiimote( void * handle );

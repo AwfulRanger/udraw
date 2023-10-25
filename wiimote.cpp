@@ -187,56 +187,23 @@ bool Wiimote::InitUDraw() {
 	return true;
 	
 }
-UDrawData Wiimote::PollUDraw() {
-	
-	/*
-	this->buf[ 0 ] = 0x17;
-	this->buf[ 1 ] = 0x04 | ( int ) this->rumble;
-	this->buf[ 2 ] = 0xA4; // addr 1
-	this->buf[ 3 ] = 0x00; // addr 2
-	this->buf[ 4 ] = 0x00; // addr 3
-	this->buf[ 5 ] = 0x00; // size 1
-	this->buf[ 6 ] = 0x06; // size 2
-	this->WriteData( buf, 7 );
-	
-	this->buf[ 0 ] = 0x21;
-	this->ReadData( buf, 22 );
-	
-	UDrawData data;
-	
-	data.x = ( int ) ( ( ( float ) ( this->buf[ 6 ] + ( 0xFF * ( this->buf[ 8 ] & 0x07 ) ) - 80 ) / 1864 ) * 1920 );
-	data.y = 1080 - ( int ) ( ( ( float ) ( this->buf[ 7 ] + ( 0xFF * ( ( this->buf[ 8 ] >> 4 ) & 0x07 ) ) - 90 ) / 1350 ) * 1080 );
-	
-	data.click = buf[ 11 ] & WIIMOTE_UDRAW_CLICK;
-	data.sideclick1 = ~buf[ 11 ] & WIIMOTE_UDRAW_SIDECLICK1;
-	data.sideclick2 = ~buf[ 11 ] & WIIMOTE_UDRAW_SIDECLICK2;
-	
-	data.pressure = buf[ 9 ];
-	if ( data.click == true ) { data.pressure += 0xFF; }
-	
-	data.buttons = this->buf[ 1 ] << 8;
-	data.buttons |= this->buf[ 2 ];
-	*/
+void Wiimote::PollUDraw( UDrawData * data ) {
 	
 	this->buf[ 0 ] = 0x32;
 	this->ReadData( buf, 11 );
 	
-	UDrawData data;
+	data->x = ( int ) ( ( ( float ) ( this->buf[ 3 ] + ( 0xFF * ( this->buf[ 5 ] & 0x07 ) ) - 80 ) / 1864 ) * 1920 );
+	data->y = 1080 - ( int ) ( ( ( float ) ( this->buf[ 4 ] + ( 0xFF * ( ( this->buf[ 5 ] >> 4 ) & 0x07 ) ) - 90 ) / 1350 ) * 1080 );
 	
-	data.x = ( int ) ( ( ( float ) ( this->buf[ 3 ] + ( 0xFF * ( this->buf[ 5 ] & 0x07 ) ) - 80 ) / 1864 ) * 1920 );
-	data.y = 1080 - ( int ) ( ( ( float ) ( this->buf[ 4 ] + ( 0xFF * ( ( this->buf[ 5 ] >> 4 ) & 0x07 ) ) - 90 ) / 1350 ) * 1080 );
+	data->click = buf[ 8 ] & WIIMOTE_UDRAW_CLICK;
+	data->sideclick1 = ~buf[ 8 ] & WIIMOTE_UDRAW_SIDECLICK1;
+	data->sideclick2 = ~buf[ 8 ] & WIIMOTE_UDRAW_SIDECLICK2;
 	
-	data.click = buf[ 8 ] & WIIMOTE_UDRAW_CLICK;
-	data.sideclick1 = ~buf[ 8 ] & WIIMOTE_UDRAW_SIDECLICK1;
-	data.sideclick2 = ~buf[ 8 ] & WIIMOTE_UDRAW_SIDECLICK2;
+	data->pressure = buf[ 6 ];
+	if ( data->click == true ) { data->pressure += 0xFF; }
 	
-	data.pressure = buf[ 6 ];
-	if ( data.click == true ) { data.pressure += 0xFF; }
-	
-	data.buttons = this->buf[ 1 ] << 8;
-	data.buttons |= this->buf[ 2 ];
-	
-	return data;
+	data->buttons = this->buf[ 1 ] << 8;
+	data->buttons |= this->buf[ 2 ];
 	
 }
 
