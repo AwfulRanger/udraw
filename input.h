@@ -5,8 +5,6 @@
 
 #include "wiimote.h"
 
-#include <Windows.h>
-
 
 
 #define UDRAW_CLICKPRESSURE 10
@@ -17,8 +15,7 @@ class Mouse {
 	
 	protected:
 		
-		INPUT input;
-		bool pressed;
+		void * data;
 		
 	public:
 		
@@ -35,8 +32,7 @@ class Pen {
 	
 	protected:
 		
-		HSYNTHETICPOINTERDEVICE device;
-		POINTER_TYPE_INFO pointer;
+		void * data;
 		
 	public:
 		

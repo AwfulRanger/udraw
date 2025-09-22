@@ -2,7 +2,35 @@
 #include "input.h"
 
 #include <cstdio>
-#include <time.h>
+#include <cstring>
+#include <cmath>
+#include <ctime>
+
+#ifdef _WIN32
+#include <Windows.h>
+#else
+#include <unistd.h>
+#endif
+
+
+
+#define MINX 85
+#define MINY 10
+#define MAXX 1960
+#define MAXY 1370
+#define CURSORX 0
+#define CURSORY 0
+#define CURSORW 1920
+#define CURSORH 1080
+
+
+
+#ifdef _WIN32
+#define CLOCKS CLOCKS_PER_SEC
+#else
+// this probably isn't a good idea but CLOCKS_PER_SEC isn't accurate anyway so whatever
+#define CLOCKS 5000
+#endif
 
 
 
@@ -32,19 +60,36 @@
 #define ANSI_BOLD ANSI_ESC "[1m"
 #define ANSI_FAINT ANSI_ESC "[2m"
 
-#define WRITEKV( x, y, color, key ) color ANSI_SETPOS( x, y ) ANSI_NORMAL key ":" ANSI_BOLD "%i"
+#define WRITEKV( color, key ) color ANSI_NORMAL key ":" ANSI_BOLD "%i "
+#define WRITEKVSTR( color, key ) color ANSI_NORMAL key ":" ANSI_BOLD "%s "
+#define WRITEKVPOS( x, y, color, key ) color ANSI_SETPOS( x, y ) ANSI_NORMAL key ":" ANSI_BOLD "%i"
+#define WRITEKVPOSSTR( x, y, color, key ) color ANSI_SETPOS( x, y ) ANSI_NORMAL key ":" ANSI_BOLD "%s"
 
 
 
-bool hasarg( const char * arg, char ** args, int argc ) {
+int hasarg( const char * arg, char ** args, int argc ) {
 	
 	for ( int i = 1; i < argc; i++ ) {
 		
-		if ( strcmp( args[ i ], arg ) == 0 ) { return true; }
+		if ( strcmp( args[ i ], arg ) == 0 ) { return i; }
 		
 	}
 	
-	return false;
+	return 0;
+	
+}
+
+int getargindex( int arg, int def, char ** args, int argc ) {
+	
+	if ( arg == 0 || arg >= argc - 1 ) { return def; }
+	
+	return atoi( args[ arg + 1 ] );
+	
+}
+
+int getarg( const char * arg, int def, char ** args, int argc ) {
+	
+	return getargindex( hasarg( arg, args, argc ), def, args, argc );
 	
 }
 
@@ -55,12 +100,31 @@ void printhelp( const char * name ) {
 	printf( "\t-help || --help || /? \t: Print this message\n" );
 	printf( "\t-mouse \t: Enable mouse input instead of pen input by default\n" );
 	printf( "\t-rumble \t: Enable rumble by default\n" );
+	printf( "\t-noinfo \t: Hide tablet info\n" );
+	printf( "\t-minx (int) \t: Set the position of the tablet's left side (default %i)\n", MINX );
+	printf( "\t-miny (int) \t: Set the position of the tablet's top side (default %i)\n", MINY );
+	printf( "\t-maxx (int) \t: Set the position of the tablet's right side (default %i)\n", MAXX );
+	printf( "\t-maxy (int) \t: Set the position of the tablet's bottom side (default %i)\n", MAXY );
+	printf( "\t-cursorx (int) \t: Set the x offset of the cursor's bounds (default %i)\n", CURSORX );
+	printf( "\t-cursory (int) \t: Set the y offset of the cursor's bounds (default %i)\n", CURSORY );
+	printf( "\t-cursorw (int) \t: Set the width of the cursor's bounds (default %i)\n", CURSORW );
+	printf( "\t-cursorh (int) \t: Set the height of the cursor's bounds (default %i)\n", CURSORH );
+	
+}
+
+void wait( unsigned int sec ) {
+	
+	#ifdef _WIN32
+	Sleep( 1000 * sec );
+	#else
+	sleep( sec );
+	#endif
 	
 }
 
 int main( int argc, char ** args ) {
 	
-	if ( hasarg( "-help", args, argc ) == true || hasarg( "--help", args, argc ) == true || hasarg( "/?", args, argc ) == true ) {
+	if ( hasarg( "-help", args, argc ) != 0 || hasarg( "--help", args, argc ) != 0 || hasarg( "/?", args, argc ) != 0 ) {
 		
 		printhelp( argc > 0 ? args[ 0 ] : "udraw" );
 		
@@ -68,16 +132,49 @@ int main( int argc, char ** args ) {
 		
 	}
 	
-	HANDLE handle = Wiimote::GetWiimoteHandle();
-	if ( handle == INVALID_HANDLE_VALUE ) { printf( "Couldn't find wiimote handle\n" ); return 0; }
+	bool found = false;
+	void * handle;
+	for ( int i = 0; i < 5; i++ ) {
+		
+		handle = Wiimote::GetWiimoteHandle( & found );
+		if ( found == true ) { break; }
+		
+		wait( 1 );
+		
+	}
+	if ( found != true ) { printf( "Couldn't find wiimote handle\n" ); return 0; }
 	
 	Wiimote * wiimote = new Wiimote( handle );
 	
-	if ( wiimote->InitUDraw() == true ) {
+	bool initudraw = false;
+	for ( int i = 0; i < 5; i++ ) {
+		
+		initudraw = wiimote->InitUDraw();
+		if ( initudraw == true ) { break; }
+		
+		wait( 1 );
+		
+	}
+	
+	if ( initudraw == true ) {
 		
 		unsigned int lastbuttons = 0;
-		bool usepen = !hasarg( "-mouse", args, argc );
-		bool userumble = hasarg( "-rumble", args, argc );
+		bool usepen = hasarg( "-mouse", args, argc ) == 0;
+		bool userumble = hasarg( "-rumble", args, argc ) != 0;
+		bool calibrate = false;
+		
+		bool showinfo = hasarg( "-noinfo", args, argc ) == 0;
+		
+		int minx = getarg( "-minx", MINX, args, argc );
+		int miny = getarg( "-miny", MINY, args, argc );
+		int maxx = getarg( "-maxx", MAXX, args, argc );
+		int maxy = getarg( "-maxy", MAXY, args, argc );
+		int cursorx = getarg( "-cursorx", CURSORX, args, argc );
+		int cursory = getarg( "-cursory", CURSORY, args, argc );
+		int cursorw = getarg( "-cursorw", CURSORW, args, argc );
+		if ( cursorw <= 0 ) { cursorw = CURSORW; }
+		int cursorh = getarg( "-cursorh", CURSORH, args, argc );
+		if ( cursorh <= 0 ) { cursorh = CURSORH; }
 		
 		Mouse * mouse = nullptr;
 		Pen * pen = nullptr;
@@ -85,9 +182,14 @@ int main( int argc, char ** args ) {
 		if ( usepen == true ) { wiimote->SetLED( WIIMOTE_LED_ONE | WIIMOTE_LED_THREE ); }
 		else { wiimote->SetLED( WIIMOTE_LED_ONE | WIIMOTE_LED_FOUR ); }
 		
+		#ifdef _WIN32
 		printf( ANSI_SETPOS( 1, 6 ) "uDraw initialized\n" );
+		#else
+		printf( "uDraw initialized\n" );
+		#endif
 		printf( "Press up on the dpad to switch between mouse mode and pen mode\n" );
 		printf( "Press down on the dpad to toggle rumble\n" );
+		printf( "Press left on the dpad to toggle pen bounds calibration mode (move the pen along the edges to set bounds)\n" );
 		printf( "Press the home button to exit\n" );
 		
 		int rate = 0;
@@ -98,10 +200,52 @@ int main( int argc, char ** args ) {
 		int lasty = -1;
 		
 		UDrawData data;
+		memset( & data, 0, sizeof( UDrawData ) );
 
 		while ( true ) {
 			
 			wiimote->PollUDraw( & data );
+			
+			int curx = data.x;
+			int cury = data.y;
+			
+			if ( calibrate == true ) {
+				
+				if ( curx != WIIMOTE_UDRAW_INVALIDX ) {
+					
+					if ( curx < minx ) { minx = curx; }
+					if ( curx > maxx ) { maxx = curx; }
+					
+				}
+				if ( cury != WIIMOTE_UDRAW_INVALIDY ) {
+					
+					if ( cury < miny ) { miny = cury; }
+					if ( cury > maxy ) { maxy = cury; }
+					
+				}
+				
+			}
+			
+			if ( curx != WIIMOTE_UDRAW_INVALIDX ) {
+				
+				if ( maxx != minx ) {
+					
+					data.x = ( int ) ( cursorw * ( ( float ) ( data.x - minx ) / ( maxx - minx ) ) );
+					
+				} else { data.x -= minx; }
+				data.x += cursorx;
+				
+			}
+			if ( cury != WIIMOTE_UDRAW_INVALIDY ) {
+				
+				if ( maxy != miny ) {
+					
+					data.y = ( int ) ( cursorh * ( ( float ) ( data.y - miny ) / ( maxy - miny ) ) );
+					
+				} else { data.y -= miny; }
+				data.y += cursory;
+				
+			}
 			
 			if ( usepen != true ) {
 				
@@ -115,25 +259,64 @@ int main( int argc, char ** args ) {
 				
 			}
 			
-			printf(
+			if ( showinfo == true ) {
 				
-				ANSI_SAVECURSOR
-				ANSI_BG
-				ANSI_SETPOS( 1, 1 ) ANSI_ERASELINE "\n" ANSI_ERASELINE "\n" ANSI_ERASELINE "\n" ANSI_ERASELINE
-				WRITEKV( 1, 1, ANSI_RED, "x" )
-				WRITEKV( 8, 1, ANSI_GREEN, "y" )
-				WRITEKV( 15, 1, ANSI_CYAN, "press" )
-				WRITEKV( 25, 1, ANSI_YELLOW, "rate" )
-				WRITEKV( 1, 2, ANSI_YELLOW, "click" )
-				WRITEKV( 9, 2, ANSI_YELLOW, "side1" )
-				WRITEKV( 17, 2, ANSI_YELLOW, "side2" )
-				WRITEKV( 25, 2, ANSI_YELLOW, "input" )
-				WRITEKV( 1, 3, ANSI_CYAN, "pen" )
-				WRITEKV( 7, 3, ANSI_CYAN, "rumble" )
-				ANSI_SETPOS( 1, 4 ) ANSI_NORMAL ANSI_BORDER "----------------------------------"
-				ANSI_RESET ANSI_RESTORECURSOR 
+				#ifdef _WIN32
+				printf(
+					
+					ANSI_SAVECURSOR
+					ANSI_BG
+					ANSI_SETPOS( 1, 1 ) ANSI_ERASELINE "\n" ANSI_ERASELINE "\n" ANSI_ERASELINE "\n" ANSI_ERASELINE
+
+				);
 				
-			, data.x, data.y, data.pressure, lastrate, data.click, data.sideclick1, data.sideclick2, data.buttons, usepen, userumble );
+				if ( curx == WIIMOTE_UDRAW_INVALIDX ) { printf( WRITEKVPOSSTR( 1, 1, ANSI_RED, "x" ), "none" ); }
+				else { printf( WRITEKVPOS( 1, 1, ANSI_RED, "x" ), data.x ); }
+				
+				if ( cury == WIIMOTE_UDRAW_INVALIDY ) { printf( WRITEKVPOSSTR( 8, 1, ANSI_GREEN, "y" ), "none" ); }
+				else { printf( WRITEKVPOS( 8, 1, ANSI_GREEN, "y" ), data.y ); }
+				
+				printf(
+					
+					WRITEKVPOS( 15, 1, ANSI_CYAN, "press" )
+					WRITEKVPOS( 25, 1, ANSI_YELLOW, "rate" )
+					WRITEKVPOS( 1, 2, ANSI_YELLOW, "click" )
+					WRITEKVPOS( 9, 2, ANSI_YELLOW, "side1" )
+					WRITEKVPOS( 17, 2, ANSI_YELLOW, "side2" )
+					WRITEKVPOS( 25, 2, ANSI_YELLOW, "input" )
+					WRITEKVPOS( 1, 3, ANSI_CYAN, "pen" )
+					WRITEKVPOS( 7, 3, ANSI_CYAN, "rumble" )
+					ANSI_SETPOS( 1, 4 ) ANSI_NORMAL ANSI_BORDER "----------------------------------"
+					ANSI_RESET ANSI_RESTORECURSOR 
+					
+				, data.pressure, lastrate, data.click, data.sideclick1, data.sideclick2, data.buttons, usepen, userumble );
+				#else
+				printf( ANSI_BG ANSI_ERASELINE "\t" );
+				
+				if ( curx == WIIMOTE_UDRAW_INVALIDX ) { printf( WRITEKVSTR( ANSI_RED, "x" ), "none" ); }
+				else { printf( WRITEKV( ANSI_RED, "x" ), data.x ); }
+				
+				if ( cury == WIIMOTE_UDRAW_INVALIDY ) { printf( WRITEKVSTR( ANSI_GREEN, "y" ), "none" ); }
+				else { printf( WRITEKV( ANSI_GREEN, "y" ), data.y ); }
+				
+				printf(
+					
+					WRITEKV( ANSI_CYAN, "press" )
+					WRITEKV( ANSI_YELLOW, "rate" )
+					WRITEKV( ANSI_YELLOW, "click" )
+					WRITEKV( ANSI_YELLOW, "side1" )
+					WRITEKV( ANSI_YELLOW, "side2" )
+					WRITEKV( ANSI_YELLOW, "input" )
+					WRITEKV( ANSI_CYAN, "pen" )
+					WRITEKV( ANSI_CYAN, "rumble" )
+					ANSI_RESET
+					"\r"
+					
+				, data.pressure, lastrate, data.click, data.sideclick1, data.sideclick2, data.buttons, usepen, userumble );
+				#endif
+				fflush( stdout );
+				
+			}
 			
 			if ( data.buttons & WIIMOTE_BUT_UP && !( lastbuttons & WIIMOTE_BUT_UP ) ) {
 				
@@ -149,18 +332,38 @@ int main( int argc, char ** args ) {
 				else { wiimote->SetLED( wiimote->GetLED() & ~WIIMOTE_LED_FOUR ); }
 				
 			}
+			if ( data.buttons & WIIMOTE_BUT_LEFT && !( lastbuttons & WIIMOTE_BUT_LEFT ) ) {
+				
+				calibrate = !calibrate;
+				if ( calibrate == true ) {
+					
+					minx = 9999;
+					miny = 9999;
+					maxx = -9999;
+					maxy = -9999;
+					wiimote->SetLED( wiimote->GetLED() | WIIMOTE_LED_TWO );
+					
+				}
+				else {
+					
+					printf( ANSI_ERASELINE "-minx %i -miny %i -maxx %i -maxy %i\n", minx, miny, maxx, maxy );
+					wiimote->SetLED( wiimote->GetLED() & ~WIIMOTE_LED_TWO );
+					
+				}
+				
+			}
 			if ( data.buttons & WIIMOTE_BUT_HOME ) { printf( "\nHome pressed, exiting\n" ); break; }
 			
-			wiimote->SetRumble( userumble == true && data.pressure > 16 && ( data.pressure / 18 ) + abs( data.x - lastx ) + abs( data.y - lasty ) > 32 );
+			wiimote->SetRumble( userumble == true && data.pressure > 16 && ( data.pressure / 18 ) + abs( curx - lastx ) + abs( cury - lasty ) > 32 );
 			
 			lastbuttons = data.buttons;
-			lastx = data.x;
-			lasty = data.y;
+			lastx = curx;
+			lasty = cury;
 			
 			rate++;
 			
 			clock_t curclock = clock();
-			if ( curclock > lastclock + CLOCKS_PER_SEC ) {
+			if ( curclock > lastclock + CLOCKS ) {
 				
 				lastclock = curclock;
 				lastrate = rate;
@@ -177,7 +380,7 @@ int main( int argc, char ** args ) {
 	
 	delete wiimote;
 	
-	CloseHandle( handle );
+	Wiimote::CloseWiimoteHandle( handle );
 	
 	return 0;
 	

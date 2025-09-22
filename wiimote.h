@@ -3,10 +3,19 @@
 
 
 
+#include <cstddef>
+
+
+
 #define WIIMOTE_VENDORID 0x057E
 #define WIIMOTE_PRODUCTID 0x0306
+#define WIIMOTE_CLASS 0x002504
+#define WIIMOTE_NAME "Nintendo RVL-CNT-01"
 
 #define WIIMOTE_BUFFERSIZE 0x20
+
+#define WIIMOTE_PSM_CONTROL 0x11
+#define WIIMOTE_PSM_DATA 0x13
 
 #define WIIMOTE_BUT_TWO 0x0001
 #define WIIMOTE_BUT_ONE 0x0002
@@ -28,8 +37,8 @@
 
 #define WIIMOTE_EXT_UDRAW 0xFF00A4200112
 
-#define WIIMOTE_UDRAW_INVALIDX 2018
-#define WIIMOTE_UDRAW_INVALIDY -480
+#define WIIMOTE_UDRAW_INVALIDX 4095
+#define WIIMOTE_UDRAW_INVALIDY -2645
 
 #define WIIMOTE_UDRAW_SIDECLICK1 0x01
 #define WIIMOTE_UDRAW_SIDECLICK2 0x02
@@ -56,7 +65,8 @@ class Wiimote {
 	public:
 		
 		// Find a Wiimote handle
-		static void * GetWiimoteHandle();
+		static void * GetWiimoteHandle( bool * found );
+		static void CloseWiimoteHandle( void * handle );
 		
 	protected:
 		
@@ -87,7 +97,7 @@ class Wiimote {
 		
 		// uDraw
 		bool InitUDraw();
-		void PollUDraw( UDrawData * data );
+		bool PollUDraw( UDrawData * data );
 		
 		// Construction
 		Wiimote( void * handle );

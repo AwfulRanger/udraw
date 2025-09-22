@@ -6,5 +6,9 @@ project( "udraw" )
 
 
 
-add_executable( "udraw" "main.cpp"  "wiimote.cpp" "wiimote.h" "input.cpp" "input.h" )
+add_executable( "udraw" "main.cpp" "wiimote.cpp" "wiimote.h" "input.cpp" "input.h" )
+if( WIN32 )
 target_link_libraries( "udraw" "hid.dll" "setupapi.dll" )
+else()
+target_link_libraries( "udraw" "bluetooth" )
+endif()
